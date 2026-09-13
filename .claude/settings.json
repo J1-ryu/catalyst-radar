@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python fetch_rss.py)",
+      "Write"
+    ]
+  }
+}

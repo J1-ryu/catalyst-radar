@@ -1,0 +1,6 @@
+__pycache__/
+.cache/
+.DS_Store
+
+# 個人のポートフォリオ構成（実データ）。テンプレートは portfolio_config.example.py。
+portfolio_config.py

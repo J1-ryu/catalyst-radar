@@ -1,0 +1,83 @@
+name: Daily Tech News Investor Report
+
+on:
+  schedule:
+    # UTC 22:00 = JST 07:00 (次の日)
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+    inputs:
+      target_date:
+        description: "対象日付 (YYYY-MM-DD)。空欄なら実行時点のJST日付を使用。失敗した過去分の再実行に使う。"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+env:
+  TZ: Asia/Tokyo
+  TARGET_DATE: ${{ github.event.inputs.target_date }}
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch and archive news articles
+        run: python fetch_and_archive.py
+
+      - name: Commit and push raw article archive
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Archive raw articles for ${TARGET_DATE:-$(date +'%Y-%m-%d')}"
+            git push
+          fi
+
+      - name: Restore personal portfolio config (optional)
+        env:
+          PORTFOLIO_CONFIG_PY: ${{ secrets.PORTFOLIO_CONFIG_PY }}
+        run: |
+          if [ -n "$PORTFOLIO_CONFIG_PY" ]; then
+            printf '%s' "$PORTFOLIO_CONFIG_PY" > portfolio_config.py
+            echo "portfolio_config.py をsecretsから復元しました。"
+          else
+            echo "PORTFOLIO_CONFIG_PY シークレットが未設定のため、ポートフォリオ非考慮モードで実行します。"
+          fi
+
+      - name: Generate tech news investor report
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          SEC_EDGAR_CONTACT: ${{ secrets.SEC_EDGAR_CONTACT }}
+        run: python generate_report.py
+
+      - name: Send report to Discord
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: python notify_discord.py
+
+      - name: Commit and push report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add reports/
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add daily tech news investor report ${TARGET_DATE:-$(date +'%Y-%m-%d')}"
+            git push
+          fi
